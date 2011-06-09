@@ -1,0 +1,178 @@
+--
+--
+import Text.HTML.TagSoup
+import Network.HTTP
+import Network.HTTP.Headers
+import System.Environment
+import Data.ByteString.UTF8
+--
+-- cabal install HTTP-Types HTTP-Enumerator
+--
+import Network.HTTP.Enumerator
+import Network.HTTP.Types
+import qualified Data.ByteString.Lazy.UTF8 as BSLU
+--
+--
+htmlFile = "quelle/Invest in Thuringia.html"
+--
+webLink = "http://www.invest-in-thuringia.de/service/firmendatenbank/?Name=&Ort=&Kreis=100+++++&BrancheText=&ClusterText=&TaetigkeitenProdukte=&MitarbeiterMin=20&MitarbeiterMax=1000&orgtypU=99&Branche=&Cluster=&SortOrder=name&PageSize=1734&Position=10"
+--
+csvFile = "test.csv"
+--
+--
+main = do
+    (uri : args) <- getArgs 
+--    print uri
+    getFirstFile uri
+--
+--
+getFirstFile uri = do
+     kDListToCSV
+     print "Lade Haupseite..."
+     ret <- readL uri
+--     ret <- readL htmlFile
+     print "Analysiere Stamdaten..."
+     requestHTML $ tableSpan $ parseTags ret
+--
+--
+readL :: FilePath -> IO String
+readL file = do
+        daten <- readFile file
+        return daten
+--
+--
+insertPath [] = []
+insertPath ('?' : rest) = "service/firmendatenbank/?" ++ (insertPath rest)
+insertPath (c : rest) = c : (insertPath rest)
+--
+--
+aTag (tag : tags) =
+      case tag of
+--       TagText text -> (text, (aTag tags)) 
+       TagOpen "a" content -> insertPath $ snd $ head content
+       _ -> aTag tags
+--
+--
+tableSpan [] = []
+tableSpan (tag : tags) = 
+      case tag of
+--       TagOpen "span" content -> aTag tags
+       TagOpen "span" [("class","RecordTitle")] -> aTag tags : (tableSpan tags)
+       _ -> tableSpan tags
+--
+--
+analyseContent (tag : tags) =
+      case tag of
+       TagText text -> text
+       TagClose "span" -> []
+       _ -> analyseContent tags
+--
+analyseSpan (tag : tags) =
+      case tag of
+       TagOpen "span" content -> analyseContent tags : (analyseSpan tags)
+       TagClose "tr" -> []
+       _ -> analyseSpan tags
+--
+analyseTR (tag : tags) =
+      case tag of
+       TagOpen "tr" content -> analyseSpan tags : (analyseTR tags)
+       TagClose "table" -> []
+       _ -> analyseTR tags
+--
+--
+--analyseFD [] = []
+analyseFD (tag : tags) =
+      case tag of 
+       TagOpen "table" content -> analyseTR tags 
+       TagClose "td" -> []
+       _ -> analyseFD tags
+--
+readFirmenDb [] = []
+readFirmenDb (tag : tags) = 
+      case tag of
+--       TagOpen "td" content -> analyseFD tags
+       TagOpen "td" [("class","result"),_] -> analyseFD tags
+--       TagOpen "td" content -> content : (readFirmenDb tags)
+       _ -> readFirmenDb tags
+--
+--
+readFDaten = do 
+--        daten <- readL "quelle/Invest in Thuringia_daten.html"
+        daten <- readL "tmp.txt"
+        print $ readFirmenDb $ parseTags daten
+--
+--
+rek [] = []
+rek (addr : rest) = (requestHTML addr) : (rek rest)
+--
+--
+requestHTML [] = return ()
+--requestHTML (addr : rest) = do
+requestHTML (addr : rest) = do
+     print "."
+--     ret <- simpleHTTP (getRequest addr) >>= getResponseBody
+--
+     req0 <- parseUrl addr
+     let req = req0 { method = methodGet }
+     res <- withManager $ httpLbs req
+--
+     appendCSV csvFile $ writeCSV $ readFirmenDb $ parseTags $ BSLU.toString $ responseBody res
+--     print $ readFirmenDb $ parseTags $ BSLU.toString $ responseBody res
+--
+--     daten <- readFirmenDb $ parseTags ret
+--     return 
+--     appendCSV  csvFile $ writeCSV $ readFirmenDb $ parseTags ret
+--     print $ readFirmenDb $ parseTags ret
+     requestHTML rest
+--     return $ readFirmenDb $ parseTags ret
+--
+--
+-- ===========================================================================
+--
+kDListToCSV = do
+      writeFile csvFile "Strasse,PLZ,Ort,Kreis,Telefon,Telefax,Internet,E-Mail\n"
+--      stringToCSV kd
+--
+--
+stringToCSV [] = return ()
+stringToCSV (daten : rst) = do
+      appendCSV csvFile (writeCSV daten)
+      stringToCSV rst 
+--
+appendCSV :: FilePath -> String -> IO ( )
+appendCSV file content = appendFile file content
+--
+--listToCSV ()
+--
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : [_, kreis] : _ : [_, tele] : [_, telefax] : [_, uri] : [_, email] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ kreis ++ "," ++ tele ++ "," ++ telefax ++ "," ++ uri ++ "," ++ email ++ "\n"
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : _ : [_, tele] : [_, telefax] : [_, uri] : [_, email] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ "," ++ tele ++ "," ++ telefax ++ "," ++ uri ++ "," ++ email ++ "\n"
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : [_, kreis] : _ : [_, tele] : [_, telefax] : [_, uri] : [] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ kreis ++ tele ++ "," ++ telefax ++ "," ++ uri ++ "," ++ "\n"
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : [_, kreis] : _ : [_, tele] : [_, telefax] : [] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ kreis ++ tele ++ "," ++ telefax ++ "," ++ "," ++ "\n"
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : [_, kreis] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ kreis ++ "," ++ "," ++ "," ++ "\n"
+--
+writeCSV ( [_, strasse] : [_, plz, ort] : _ ) =
+    strasse ++ "," ++ plz ++ "," ++ ort ++ "," ++ "," ++ "," ++ "," ++ "\n"
+--
+printHtml = do 
+        daten <- readL htmlFile
+        print $ parseTags daten
+--
+--
+testWeb = do
+   ret <- simpleHTTP (getRequest "http://www.invest-in-thuringia.de/service/firmendatenbank/?searchScope=firmen-detail&adrid=2660") >>= getResponseBody
+   print ret
+--   rsps <- mapM (simpleHTTP . flip setHeaders [hdr] . getRequest .
+--       ("http://spiritdev.fh-schmalkalden.de/database/"++)) "1"
+--   print rsps
+--
+--

@@ -1,0 +1,24 @@
+Name:                InvestWebParser 
+Version:             0.1
+Synopsis:            Web Parser for www.invest-in-thuringia.de
+License:             BSD3
+Author:              Christian Linde
+Maintainer:          linde.chris@gmail.com
+Category:            Misc
+Build-type:          Simple
+Cabal-version:       >=1.2
+Description:         This is a parser for the invest-in-thuringia web page.
+It parse the www.invest-in-thuringia.de/service/firmendatenbank/ page as input from hard drive.
+Optional the tool parses it directly form the web page.
+As a output it writes the company data as a line in a file and separates the values with a ';'.
+
+Libarary {
+
+}
+
+Executable InvestWebParser
+  hs-source-dirs:    src
+  Main-is:           main.hs
+  Build-depends:     base >= 4.2 && < 5,
+                     tagsoup, http-enumerator, 
+                     http-types, utf8-string
