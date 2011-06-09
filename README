@@ -1,0 +1,17 @@
+This is a Parser for the www.invest-in-thuringia.de web page.
+
+For example you can download the web page with all company names.
+The Tool will read it an get all company data in a file.
+
+$ cabal configure
+$ cabal build
+$ cabal install
+
+or just
+
+$ cabal install
+
+It contains also some examples of haddock source code documentation which can be generated via
+
+$ cabal haddock --executables
+
